@@ -1,3 +1,4 @@
+# Dépendances générales
 aniso8601==9.0.1
 annotated-types==0.6.0
 anyio==4.3.0
@@ -59,7 +60,6 @@ Pygments==2.18.0
 PyMySQL==1.1.1
 python-dateutil==2.9.0.post0
 pytz==2024.1
-pywin32==308
 pyzmq==26.2.0
 referencing==0.35.1
 requests==2.32.3
@@ -81,3 +81,6 @@ wcwidth==0.2.13
 webencodings==0.5.1
 Werkzeug==3.0.3
 yarg==0.1.9
+
+# Dépendance spécifique à Windows
+pywin32==308; sys_platform == "win32"
