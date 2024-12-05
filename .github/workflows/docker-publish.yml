@@ -46,7 +46,6 @@ jobs:
         source venv/bin/activate
         pip install -r requirements.txt
 
-    # Ajout de l'étape pour ignorer les tests
     - name: Skip Tests
       run: echo "Skipping tests step"
 
@@ -55,11 +54,11 @@ jobs:
 
     - name: Build Docker Image
       run: |
-        docker build -t ${{ env.REGISTRY }}/${{ env.ORGA_NAME }}/${{ env.IMAGE_NAME }}:latest .
-
+        docker build -t ${{ env.REGISTRY }}/${{ env.ORGA_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+      
     - name: Push Docker Image
       run: |
-        docker push ${{ env.REGISTRY }}/${{ env.ORGA_NAME }}/${{ env.IMAGE_NAME }}:latest
+        docker push ${{ env.REGISTRY }}/${{ env.ORGA_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -69,4 +68,4 @@ jobs:
     - name: Deploy to server
       run: |
         echo "Deploying application..."
-        # Commandes de déploiement, ex. SSH + Docker-compose ou Kubernetes
+        # Commandes de déploiement spécifiques (ex. SSH, Kubernetes)
