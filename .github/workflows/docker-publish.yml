@@ -45,7 +45,6 @@ jobs:
       run: |
         source venv/bin/activate  # Active l'environnement virtuel
         pip install -r requirements.txt
-        pip install pytest  # Installe pytest dans l'environnement virtuel
 
     - name: Run tests
       run: |
