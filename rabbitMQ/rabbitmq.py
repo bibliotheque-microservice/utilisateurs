@@ -1,9 +1,18 @@
 import pika
 import json
 import logging
+from models import PenaltyModel  # Assure-toi que ce modèle existe dans ton projet.
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
 # Configurer le logging
 logging.basicConfig(level=logging.INFO)
+
+# Configurer la base de données (exemple)
+DATABASE_URL = "sqlite:///database.db"  # Remplace par ta configuration
+engine = create_engine(DATABASE_URL)
+Session = sessionmaker(bind=engine)
+db_session = Session()
 
 def init_rabbitmq():
     try:
@@ -50,16 +59,30 @@ def publish_message(channel, exchange_name, routing_key, message):
 def callback_penalties(ch, method, properties, body):
     try:
         message = json.loads(body)
+        penalty_id = message.get('penalty_id')
+        user_id = message.get('user_id')
+        amount = message.get('amount')
+
         if method.routing_key == 'user.v1.penalities.new':
-            logging.info(f"Message reçu sur 'user.v1.penalities.new' : {message}")
-            # Traitement de la pénalité
-            # Ajouter la pénalité à la base de données (exemple)
-            # db.session.add(penalite)
-            # db.session.commit()
+            logging.info(f"Nouvelle pénalité reçue : {message}")
+            new_penalty = PenaltyModel(id=penalty_id, user_id=user_id, amount=amount, status='new')
+            db_session.add(new_penalty)
+            db_session.commit()
+            logging.info(f"Pénalité ajoutée en base de données : {new_penalty}")
+
         elif method.routing_key == 'user.v1.penalities.paid':
-            logging.info(f"Message reçu sur 'user.v1.penalities.paid' : {message}")
+            logging.info(f"Pénalité payée reçue : {message}")
+            penalty = db_session.query(PenaltyModel).filter_by(id=penalty_id).first()
+            if penalty:
+                db_session.delete(penalty)
+                db_session.commit()
+                logging.info(f"Pénalité supprimée de la base de données : {penalty_id}")
+            else:
+                logging.warning(f"Pénalité introuvable : {penalty_id}")
+
         else:
             logging.warning(f"Message non géré avec Routing Key {method.routing_key}")
+
     except Exception as e:
         logging.error(f"Erreur lors du traitement du message de pénalité : {e}")
 
