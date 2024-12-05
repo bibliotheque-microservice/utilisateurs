@@ -39,13 +39,16 @@ jobs:
     - name: Create virtual environment
       run: |
         python -m venv venv
-        source venv/bin/activate  # Active l'environnement virtuel
+        source venv/bin/activate
 
     - name: Install dependencies
       run: |
-        source venv/bin/activate  # Active l'environnement virtuel
+        source venv/bin/activate
         pip install -r requirements.txt
 
+    # Ajout de l'étape pour ignorer les tests
+    - name: Skip Tests
+      run: echo "Skipping tests step"
 
     - name: Log in to GitHub Container Registry
       run: echo "${{ secrets.PAT }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.USER }} --password-stdin
