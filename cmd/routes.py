@@ -83,3 +83,12 @@ def verifier_retards():
             db.session.commit()
 
     return jsonify({"message": "Retards vérifiés et pénalités créées."}), 200
+
+# **Nouvelle route** pour vérifier si un utilisateur est bloqué
+@routes.route('/check_blocked/<int:user_id>', methods=['GET'])
+def check_blocked(user_id):
+    penalty_count = Penalite.query.filter_by(utilisateur_id=user_id, status='unpaid').count()
+
+    if penalty_count > 10:  # Remplace 10 par la limite choisie
+        return jsonify({"blocked": True, "message": "User is blocked due to too many penalties"}), 200
+    return jsonify({"blocked": False, "message": "User is not blocked"}), 200
