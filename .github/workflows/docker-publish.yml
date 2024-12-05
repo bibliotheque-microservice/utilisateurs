@@ -49,6 +49,16 @@ jobs:
     - name: Skip Tests
       run: echo "Skipping tests step"
 
+    - name: Vérifier que le secret LOGINDOCKER est valide
+      run: |
+        if [ -z "${{ secrets.LOGINDOCKER }}" ]; then
+          echo "Erreur : le secret LOGINDOCKER est vide"
+          exit 1
+        else
+          echo "Le secret LOGINDOCKER est valide"
+        fi
+
+
     - name: Log in to GitHub Container Registry
       run: |
         echo ${{ secrets.LOGINDOCKER }} | docker login ghcr.io -u ${{ secrets.USER }} --password-stdin
