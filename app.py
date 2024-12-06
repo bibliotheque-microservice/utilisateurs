@@ -1,10 +1,12 @@
 from dotenv import load_dotenv
-load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
 import os
 from flask import Flask, request, jsonify
 import psycopg2
 import pika
 import json
+
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -15,64 +17,85 @@ DB_NAME = os.getenv('DB_NAME')
 DB_HOST = os.getenv('DB_HOST')
 PORT = os.getenv('PORT')
 DB_PORT = os.getenv('DB_PORT')
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')  # Default 'rabbitmq' if not specified
+
+# Vérification de l'existence des variables d'environnement nécessaires
+if not all([DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, DB_PORT]):
+    raise ValueError("Les variables d'environnement de la base de données sont manquantes")
+
+# Route pour la page d'accueil
+@app.route('/')
+def home():
+    return "Bienvenue sur l'application de gestion des pénalités !"
 
 # Route pour payer une pénalité
 @app.route('/penalite/pay', methods=['POST'])
 def pay_penalite():
-    print("Requête reçue : ", request.data)  # Log le corps brut reçu
-    try:
-        data = request.json  # Tente de parser le JSON
-        print("Données parsées : ", data)  # Log les données parsées
-        penalite_id = data.get('id_penalite')  # Extraire le penalite_id du corps de la requête
-    except Exception as e:
-        print("Erreur de parsing JSON : ", str(e))
+    if not request.is_json:
         return jsonify({"error": "Données JSON invalides"}), 400
+
+    data = request.get_json()
+    penalite_id = data.get('id_penalite')
+
     if not penalite_id:
         return jsonify({"error": "id_penalite manquant dans la requête"}), 400
 
-    # Vérifier si la pénalité existe
-    conn = psycopg2.connect(
-        dbname=DB_NAME, 
-        user=DB_USER, 
-        password=DB_PASSWORD, 
-        host=DB_HOST, 
-        port=DB_PORT
-    )
-    cursor = conn.cursor()
     try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME, 
+            user=DB_USER, 
+            password=DB_PASSWORD, 
+            host=DB_HOST, 
+            port=DB_PORT
+        )
+        cursor = conn.cursor()
+
+        # Vérifie si la pénalité existe
         cursor.execute('SELECT * FROM penalites WHERE id_penalite = %s', (penalite_id,))
         penalite = cursor.fetchone()
 
         if not penalite:
             return jsonify({"error": "Pénalité non trouvée"}), 404
 
-        # Mettre à jour la pénalité comme payée
+        # Met à jour la pénalité comme payée
         cursor.execute(''' 
             UPDATE penalites
             SET paye = TRUE, date_paiement = NOW()
             WHERE id_penalite = %s;
         ''', (penalite_id,))
         conn.commit()
-    finally:
-        conn.close()
 
-    # Envoyer un message RabbitMQ
+    except psycopg2.DatabaseError as e:
+        return jsonify({"error": f"Erreur de base de données: {str(e)}"}), 500
+
+    finally:
+        if conn:
+            conn.close()
+
+    # Envoie un message RabbitMQ
     send_payment_notification(penalite_id)
 
     return jsonify({"message": "Pénalité payée avec succès et notification envoyée"}), 200
 
-# Fonction pour envoyer un message RabbitMQ après paiement
+# Fonction pour envoyer un message RabbitMQ après paiement de la pénalité
 def send_payment_notification(penalite_id):
     try:
-        connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
+        # Connexion à RabbitMQ
+        connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
         channel = connection.channel()
-        channel.queue_declare(queue='paiements_queue')
 
+        # Déclare la queue pour envoyer le message
+        channel.queue_declare(queue='paiements_queue')
+        
+        # Crée le message à envoyer
         message = {"id_penalite": penalite_id}
         channel.basic_publish(exchange='', routing_key='paiements_queue', body=json.dumps(message))
         print(f"Message envoyé: {message}")
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message RabbitMQ : {str(e)}")
     finally:
-        connection.close()
+        if connection:
+            connection.close()  # Indentation correcte ici
 
 if __name__ == "__main__":
     app.run(debug=True)

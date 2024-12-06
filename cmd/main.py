@@ -37,7 +37,7 @@ with app.app_context():
 # Routes API
 @app.route('/utilisateurs', methods=['POST'])
 def ajouter_utilisateur():
-    data = request.json
+    data = request.get_json()
     nouvel_utilisateur = Utilisateur(
         nom=data['nom'], 
         prenom=data['prenom'], 
