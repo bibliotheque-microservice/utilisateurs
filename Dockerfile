@@ -1,35 +1,35 @@
-# Utilisation de l'image de base Python
 FROM python:3.10-slim
 
-# Installer les dépendances système nécessaires, y compris netcat-openbsd et d'autres utilitaires
+# Installer les dépendances nécessaires pour exécuter Flask et le script
 RUN apt-get update && \
     apt-get install -y netcat-openbsd bash && \
     rm -rf /var/lib/apt/lists/*
 
-# Définir le répertoire de travail dans le conteneur
 WORKDIR /usr/src/app
 
-# Copier le fichier des dépendances (ex: requirements.txt) et installer les dépendances
+# Copier et installer les dépendances Python
 COPY requirements.txt ./ 
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copier le reste des fichiers de l'application dans le conteneur
-COPY . .
+# Copier tous les fichiers de l'application dans le conteneur
+COPY . . 
+
+COPY .env /usr/src/app/.env
+
+# Assurer que le script wait-for-rabbitmq.sh a les bonnes permissions
 COPY wait-for-rabbitmq.sh /usr/src/app/wait-for-rabbitmq.sh
+RUN chmod 755 /usr/src/app/wait-for-rabbitmq.sh
 
-# Vérification de la structure du répertoire et de la présence du fichier main.py
-RUN echo "Vérification de la structure du répertoire et du fichier main.py..." && ls -l /usr/src/app/ && cat /usr/src/app/main.py
+# Vérifier si main.py est bien copié
+RUN ls -l /usr/src/app/main.py
 
-# Vérifier et modifier les permissions des fichiers dans le conteneur
-RUN chmod -R 755 /usr/src/app
-RUN chmod +x /usr/src/app/wait-for-rabbitmq.sh
+# Vérification de la structure et des permissions des fichiers
+RUN ls -l /usr/src/app/models
+RUN ls -l /usr/src/app/models/models.py
 
-# Définir la variable d'environnement Flask avec un chemin relatif
+# Définir l'application Flask et exposer le port
 ENV FLASK_APP=main
-
-# Exposer le port 5000 pour Flask
 EXPOSE 5000
 
-# Commande par défaut : utilisation dans docker-compose pour attendre RabbitMQ avant de démarrer Flask
-CMD ["./wait-for-rabbitmq.sh", "rabbitmq:5672", "--", "flask", "run", "--host=0.0.0.0", "--port=5000"]
+# Lancer Flask directement sans attendre RabbitMQ
+CMD echo "RabbitMQ check skipped. Flask will start directly." && flask run --host=0.0.0.0 --port=5000

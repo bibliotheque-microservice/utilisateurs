@@ -8,9 +8,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - .:/usr/src/app  # Montage correct du répertoire principal
-      - /usr/src/app/__pycache__
-      - ./rabbitMQ:/usr/src/app/rabbitMQ  # Montage du répertoire rabbitMQ
+      - .:/usr/src/app  # Montage du répertoire principal pour l'application
     environment:
       FLASK_APP: /usr/src/app/main.py
     depends_on:
@@ -40,8 +38,7 @@ services:
       - 5672:5672
       - 15672:15672
     volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-      - rabbitmq-log:/var/log/rabbitmq
+      - ./rabbitMQ:/usr/src/app/rabbitMQ  # Montage du répertoire rabbitMQ
 
   db:
     image: postgres:alpine
