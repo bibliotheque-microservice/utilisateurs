@@ -8,8 +8,11 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - .:/usr/src/app
-    command: flask run --host=0.0.0.0
+      - .:/usr/src/app  # Montage correct du répertoire principal
+      - /usr/src/app/__pycache__
+      - ./rabbitMQ:/usr/src/app/rabbitMQ  # Montage du répertoire rabbitMQ
+    environment:
+      FLASK_APP: /usr/src/app/main.py
     depends_on:
       - db
       - rabbitmq
@@ -42,6 +45,7 @@ services:
 
   db:
     image: postgres:alpine
+    container_name: 'postgres-db'
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}

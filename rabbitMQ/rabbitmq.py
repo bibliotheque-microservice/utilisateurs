@@ -1,7 +1,7 @@
 import pika
 import json
 import logging
-from models import PenaltyModel  # Assure-toi que ce modèle existe dans ton projet.
+from models.models import PenaltyModel  # Assure-toi que ce modèle existe dans ton projet.
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 

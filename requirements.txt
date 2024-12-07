@@ -29,3 +29,4 @@ SQLAlchemy==2.0.36
 starlette==0.37.2
 uvicorn==0.29.0
 Werkzeug==3.0.3
+python-dotenv==1.0.0

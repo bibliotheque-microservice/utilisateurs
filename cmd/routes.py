@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from app import db
-from app.models import Utilisateur, Penalite, Emprunt
+from cmd import db
+from models.models import Utilisateur, Penalite, Emprunt
 from datetime import datetime
 
 # Création du Blueprint pour les routes
