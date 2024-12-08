@@ -26,7 +26,7 @@ if not all([DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, DB_PORT]):
 # Route pour la page d'accueil
 @app.route('/')
 def home():
-    return "Bienvenue sur l'application de gestion des pénalités !"
+    return "Bienvenue sur l'application de gestion des utilisateurs"
 
 # Route pour payer une pénalité
 @app.route('/penalite/pay', methods=['POST'])
@@ -39,10 +39,10 @@ def pay_penalite():
 
     if not penalite_id:
         return jsonify({"error": "id_penalite manquant dans la requête"}), 400
-
+    conn = None 
     try:
         conn = psycopg2.connect(
-            dbname=DB_NAME, 
+            dbname="bibliotheque", 
             user=DB_USER, 
             password=DB_PASSWORD, 
             host=DB_HOST, 
