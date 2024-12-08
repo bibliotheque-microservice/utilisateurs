@@ -79,14 +79,24 @@ CREATE TABLE emprunts (
     UNIQUE(utilisateur_id, livre_id, date_retour_effectif) -- Empêche un utilisateur de réemprunter un même livre sans l'avoir rendu
 );
 
+INSERT INTO emprunts (utilisateur_id, livre_id, date_emprunt, date_retour_prevu, statut)
+VALUES
+(1, 1, '2024-12-01', '2024-12-15', 'en_cours'),  -- Emprunt de John Doe pour le livre 1
+(2, 2, '2024-12-02', '2024-12-16', 'en_cours'),  -- Emprunt de Jane Smith pour le livre 2
+(1, 3, '2024-11-25', '2024-12-09', 'en_cours'),  -- Emprunt de John Doe pour le livre 3
+(2, 4, '2024-11-30', '2024-12-14', 'en_cours');  -- Emprunt de Jane Smith pour le livre 4
+
 -- Création de la table des pénalités (frais imposés pour des retards ou dommages)
 CREATE TABLE penalites (
-    id_penalite SERIAL PRIMARY KEY,              -- Identifiant unique pour chaque pénalité
-    utilisateur_id INT NOT NULL,                 -- ID de l'utilisateur sanctionné
-    emprunt_id INT NOT NULL,                     -- ID de l'emprunt concerné
-    montant DECIMAL(10, 2) NOT NULL,             -- Montant de la pénalité
-    paye BOOLEAN DEFAULT FALSE,                  -- Statut de paiement (non payé par défaut)
-    date_calcul TIMESTAMP DEFAULT NOW(),         -- Date à laquelle la pénalité a été calculée
-    date_paiement TIMESTAMP,                     -- Date à laquelle la pénalité a été payée
-    FOREIGN KEY (emprunt_id) REFERENCES emprunts (id_emprunt) ON DELETE CASCADE -- Si l'emprunt est supprimé, la pénalité l'est aussi
+    id_penalite SERIAL PRIMARY KEY,              
+    utilisateur_id INT NOT NULL,                 
+    emprunt_id INT NOT NULL,                     
+    montant DECIMAL(10, 2) NOT NULL,             
+    paye BOOLEAN DEFAULT FALSE,                  
+    date_calcul TIMESTAMP DEFAULT NOW(),         
+    date_paiement TIMESTAMP,                     
+    FOREIGN KEY (emprunt_id) REFERENCES emprunts (id_emprunt) ON DELETE CASCADE
 );
+
+INSERT INTO penalites (utilisateur_id, emprunt_id, montant) 
+VALUES (1, 1, 50.00);

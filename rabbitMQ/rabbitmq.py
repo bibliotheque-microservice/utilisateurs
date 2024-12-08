@@ -16,7 +16,8 @@ db_session = Session()
 
 def init_rabbitmq():
     try:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq-users'))
+        connection = None
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq-users', credentials=pika.PlainCredentials('admin', 'admin')))
         channel = connection.channel()
 
         # Déclaration des exchanges

@@ -42,7 +42,7 @@ def pay_penalite():
     conn = None 
     try:
         conn = psycopg2.connect(
-            dbname="bibliotheque", 
+            dbname="my_database", 
             user=DB_USER, 
             password=DB_PASSWORD, 
             host=DB_HOST, 
@@ -79,23 +79,22 @@ def pay_penalite():
 
 # Fonction pour envoyer un message RabbitMQ après paiement de la pénalité
 def send_payment_notification(penalite_id):
+    connection = None  
     try:
-        # Connexion à RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST), credentials=pika.PlainCredentials('admin', 'admin'))
         channel = connection.channel()
 
-        # Déclare la queue pour envoyer le message
         channel.queue_declare(queue='paiements_queue')
-        
-        # Crée le message à envoyer
+
         message = {"id_penalite": penalite_id}
         channel.basic_publish(exchange='', routing_key='paiements_queue', body=json.dumps(message))
         print(f"Message envoyé: {message}")
     except Exception as e:
         print(f"Erreur lors de l'envoi du message RabbitMQ : {str(e)}")
     finally:
-        if connection:
-            connection.close()  # Indentation correcte ici
+        if connection:  
+            connection.close() 
+
 
 if __name__ == "__main__":
     app.run(debug=True)
