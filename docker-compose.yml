@@ -7,6 +7,9 @@ services:
       - .env
     ports:
       - "5000:5000"
+    environment:
+      - FLASK_APP=app.py  
+      - FLASK_DEBUG=1  
     volumes:
       - .:/usr/src/app
     command: flask run --host=0.0.0.0

@@ -9,6 +9,9 @@ from flask_sqlalchemy import SQLAlchemy
 import psycopg2
 import pika
 from dotenv import load_dotenv
+import logging
+
+
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -21,15 +24,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql+psycopg2://{os.getenv('DB_U
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+logging.basicConfig(level=logging.DEBUG)
+app.logger.setLevel(logging.DEBUG)
+
 # Récupérer les variables d'environnement
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
 DB_HOST = os.getenv('DB_HOST')
 DB_PORT = os.getenv('DB_PORT')
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq-users')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'admin')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'admin')
+
 
 # Vérification des variables d'environnement
 missing_env_vars = [
@@ -69,11 +76,57 @@ with app.app_context():
 
 # Fonction pour initialiser RabbitMQ
 def init_rabbitmq():
-    # Connexion à RabbitMQ
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)))
-    channel = connection.channel()
-    channel.queue_declare(queue='paiements_queue')
-    connection.close()
+    global connection, channel
+    print("here")
+    app.logger.info("here")
+
+    try:
+        app.logger.info("Tentative de connexion à RabbitMQ...")
+        parameters = pika.ConnectionParameters(RABBITMQ_HOST,5672,  credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD), heartbeat=10)
+        # Connexion à RabbitMQ
+        connection = pika.BlockingConnection(parameters)
+        # Création du canal
+        channel = connection.channel()
+        # Déclaration de la queue
+        channel.queue_declare(queue='paiements_queue', durable=True, auto_delete=False)
+        app.logger.info("RabbitMQ initialisé et queue déclarée.")
+        
+        return connection, channel     
+    except Exception as e:
+        app.logger.error(f"Erreur lors de l'initialisation de RabbitMQ: {str(e)}")
+
+
+connection, channel = init_rabbitmq()
+
+def callback(method, properties, body):
+    """pika basic consume callback"""
+    try:
+        print('GOT:', body.decode())  # Confirm message content
+        app.logger.info(f"Received message: {body.decode()}")
+    except Exception as e:
+        app.logger.error(f"Erreur lors du traitement du message : {e}")
+
+def start_consuming():
+    """Commence la consommation des messages RabbitMQ"""
+    try:
+        if channel is None or channel.is_closed:
+            raise Exception("Canal RabbitMQ non initialisé ou fermé")
+        
+        # Démarre la consommation de messages
+        channel.basic_consume(queue='paiements_queue', on_message_callback=callback, auto_ack=True)
+        app.logger.info("En attente de messages...")
+        channel.start_consuming()  # Cette méthode est bloquante, elle attend des messages en continu
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la consommation des messages : {str(e)}")
+
+def start_rabbitmq_thread():
+    """Démarre un thread pour consommer les messages RabbitMQ"""
+    consumer_thread = threading.Thread(target=start_consuming)
+    consumer_thread.daemon = True  # S'assure que le thread se termine quand l'application principale se termine
+    consumer_thread.start()
+
+
+start_rabbitmq_thread() 
 
 # Route pour la page d'accueil
 @app.route('/')
@@ -209,24 +262,23 @@ def pay_penalite():
 # Fonction pour envoyer un message RabbitMQ
 def send_payment_notification(penalite_id):
     app.logger.info(f"Envoi de notification RabbitMQ pour pénalité {penalite_id}")
-    connection = None
     try:
-        credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-        connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, credentials=credentials))
-        channel = connection.channel()
-
-        channel.queue_declare(queue='paiements_queue')
-
+        
+        if channel is None or not channel.is_open:
+            app.logger.error("Canal RabbitMQ fermé ou non initialisé. Tentative de reconnexion...")
+            init_rabbitmq()
+  
         message = {"id_penalite": penalite_id}
         channel.basic_publish(exchange='', routing_key='paiements_queue', body=json.dumps(message))
         app.logger.info(f"Message envoyé : {message}")
     except Exception as e:
         app.logger.error(f"Erreur lors de l'envoi du message RabbitMQ : {str(e)}")
-    finally:
-        if connection:
-            connection.close()
 
 # Lancer l'application Flask et RabbitMQ
 if __name__ == '__main__':
-    threading.Thread(target=init_rabbitmq, daemon=True).start()  # Lancer RabbitMQ dans un thread
-    app.run(debug=True, host='0.0.0.0')
+    # Lancer RabbitMQ dans un thread séparé pour ne pas bloquer Flask
+    rabbitmq_thread = threading.Thread(target=start_consuming)
+    rabbitmq_thread.daemon = True 
+    rabbitmq_thread.start()
+    app.run(debug=True, host='0.0.0.0', port=5000)
+
