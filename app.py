@@ -1,14 +1,25 @@
-from dotenv import load_dotenv
+import json
+import threading
+import logging
 import os
+import pika
+from datetime import datetime
 from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 import psycopg2
 import pika
-import json
+from dotenv import load_dotenv
 
 # Charger les variables d'environnement
 load_dotenv()
 
+# Initialisation de l'application Flask
 app = Flask(__name__)
+
+# Configuration de la base de données
+app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql+psycopg2://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
 # Récupérer les variables d'environnement
 DB_USER = os.getenv('DB_USER')
@@ -16,7 +27,7 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
 DB_HOST = os.getenv('DB_HOST')
 DB_PORT = os.getenv('DB_PORT')
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')  # Default 'rabbitmq' if not specified
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'admin')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'admin')
 
@@ -28,10 +39,118 @@ missing_env_vars = [
 if missing_env_vars:
     raise ValueError(f"Les variables d'environnement suivantes sont manquantes : {missing_env_vars}")
 
+# Modèles SQLAlchemy
+class Utilisateur(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nom = db.Column(db.String(50), nullable=False)
+    prenom = db.Column(db.String(50), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    date_creation = db.Column(db.Date, default=db.func.current_date())
+    emprunts = db.relationship('Emprunt', backref='utilisateur', lazy=True)
+
+class Penalite(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateur.id'), nullable=False)
+    montant = db.Column(db.Numeric(10, 2), nullable=False)
+    description = db.Column(db.String(255))
+    date_penalite = db.Column(db.Date, default=db.func.current_date())
+
+class Emprunt(db.Model):
+    id_emprunt = db.Column(db.Integer, primary_key=True)
+    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateur.id'))
+    livre_id = db.Column(db.Integer, nullable=False)
+    date_emprunt = db.Column(db.DateTime, default=datetime.utcnow)
+    date_retour_prevu = db.Column(db.DateTime, nullable=False)
+    date_retour_effectif = db.Column(db.DateTime, nullable=True)
+
+# Initialisation de la base de données
+with app.app_context():
+    db.create_all()
+
+# Fonction pour initialiser RabbitMQ
+def init_rabbitmq():
+    # Connexion à RabbitMQ
+    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST, credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)))
+    channel = connection.channel()
+    channel.queue_declare(queue='paiements_queue')
+    connection.close()
+
 # Route pour la page d'accueil
 @app.route('/')
 def home():
     return "Bienvenue sur l'application de gestion des utilisateurs"
+
+# Route pour ajouter un utilisateur
+@app.route('/utilisateurs', methods=['POST'])
+def ajouter_utilisateur():
+    data = request.get_json()
+    nouvel_utilisateur = Utilisateur(
+        nom=data['nom'], 
+        prenom=data['prenom'], 
+        email=data['email']
+    )
+    db.session.add(nouvel_utilisateur)
+    db.session.commit()
+    return jsonify({"message": "Utilisateur ajouté avec succès."})
+
+# Route pour récupérer un utilisateur par ID
+@app.route('/utilisateurs/<int:id>', methods=['GET'])
+def get_utilisateur(id):
+    utilisateur = Utilisateur.query.get_or_404(id)
+    return jsonify({
+        "id": utilisateur.id,
+        "nom": utilisateur.nom,
+        "prenom": utilisateur.prenom,
+        "email": utilisateur.email,
+        "date_creation": utilisateur.date_creation
+    })
+
+# Route pour ajouter une pénalité
+@app.route('/penalites', methods=['POST'])
+def ajouter_penalite():
+    data = request.json
+    nouvelle_penalite = Penalite(
+        utilisateur_id=data['utilisateur_id'], 
+        montant=data['montant'], 
+        description=data['description']
+    )
+    db.session.add(nouvelle_penalite)
+    db.session.commit()
+    return jsonify({"message": "Pénalité ajoutée avec succès."})
+
+# Route pour vérifier les emprunts en retard
+@app.route('/verifier_retards', methods=['GET'])
+def verifier_retards():
+    today = datetime.today().date()
+    emprunts_en_retard = Emprunt.query.filter(Emprunt.date_retour_effectif < today).all()
+
+    for emprunt in emprunts_en_retard:
+        emprunt.est_retard = True
+        db.session.commit()
+
+        penalite_existante = Penalite.query.filter_by(utilisateur_id=emprunt.utilisateur_id).order_by(Penalite.date_penalite.desc()).first()
+        
+        if penalite_existante:
+            if penalite_existante.date_penalite < today:
+                nouvelle_penalite = Penalite(
+                    utilisateur_id=emprunt.utilisateur_id,
+                    montant=5.00,
+                    description=f"Retard pour l'emprunt du livre {emprunt.livre_id}.",
+                    date_penalite=today
+                )
+                db.session.add(nouvelle_penalite)
+                db.session.commit()
+        else:
+            nouvelle_penalite = Penalite(
+                utilisateur_id=emprunt.utilisateur_id,
+                montant=5.00,
+                description=f"Retard pour l'emprunt du livre {emprunt.livre_id}.",
+                date_penalite=today
+            )
+            db.session.add(nouvelle_penalite)
+            db.session.commit()
+
+    return jsonify({"message": "Retards vérifiés et pénalités créées."})
 
 # Route pour payer une pénalité
 @app.route('/penalite/pay', methods=['POST'])
@@ -107,5 +226,7 @@ def send_payment_notification(penalite_id):
         if connection:
             connection.close()
 
-if __name__ == "__main__":
+# Lancer l'application Flask et RabbitMQ
+if __name__ == '__main__':
+    threading.Thread(target=init_rabbitmq, daemon=True).start()  # Lancer RabbitMQ dans un thread
     app.run(debug=True, host='0.0.0.0')

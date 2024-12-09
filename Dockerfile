@@ -5,11 +5,11 @@ FROM python:3.10-slim
 WORKDIR /usr/src/app
 
 # Copier le fichier des dépendances (ex: requirements.txt)
-COPY requirements.txt ./
+COPY requirements.txt .
 
-# Installer les dépendances Python
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Mettre à jour pip et installer les dépendances Python sans garder le cache
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copier le reste des fichiers de l'application dans le conteneur
 COPY . .

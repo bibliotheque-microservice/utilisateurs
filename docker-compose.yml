@@ -11,9 +11,9 @@ services:
       - .:/usr/src/app
     command: flask run --host=0.0.0.0
     depends_on:
-      db: 
-        condition: service_started
-      rabbitmq :
+      db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   adminer:
@@ -53,6 +53,11 @@ services:
     volumes:
       - ./migrations/dump.sql:/docker-entrypoint-initdb.d/dump.sql
       - postgres-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER}", "-d", "${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres-db:
