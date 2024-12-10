@@ -48,27 +48,30 @@ if missing_env_vars:
 
 # Modèles SQLAlchemy
 class Utilisateur(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = 'utilisateurs'  # Spécifier le nom de la table
+    id_utilisateur = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(50), nullable=False)
     prenom = db.Column(db.String(50), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
-    date_creation = db.Column(db.Date, default=db.func.current_date())
+    statut = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.Date, default=db.func.current_date())
     emprunts = db.relationship('Emprunt', backref='utilisateur', lazy=True)
 
 class Penalite(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateur.id'), nullable=False)
+    __tablename__ = 'penalites'  # Spécifier le nom de la table
+    id_penalite = db.Column(db.Integer, primary_key=True)
+    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateurs.id_utilisateur'), nullable=False)  # Correction de la référence à la table 'utilisateurs'
     montant = db.Column(db.Numeric(10, 2), nullable=False)
-    description = db.Column(db.String(255))
-    date_penalite = db.Column(db.Date, default=db.func.current_date())
 
 class Emprunt(db.Model):
+    __tablename__ = 'emprunts'  # Spécifier le nom de la table
     id_emprunt = db.Column(db.Integer, primary_key=True)
-    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateur.id'))
+    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateurs.id_utilisateur'), nullable=False)  # Correction de la référence à la table 'utilisateurs'
     livre_id = db.Column(db.Integer, nullable=False)
     date_emprunt = db.Column(db.DateTime, default=datetime.utcnow)
     date_retour_prevu = db.Column(db.DateTime, nullable=False)
     date_retour_effectif = db.Column(db.DateTime, nullable=True)
+
 
 # Initialisation de la base de données
 with app.app_context():
@@ -136,11 +139,11 @@ def ajouter_utilisateur():
 def get_utilisateur(id):
     utilisateur = Utilisateur.query.get_or_404(id)
     return jsonify({
-        "id": utilisateur.id,
+        "id": utilisateur.id_utilisateur,
         "nom": utilisateur.nom,
         "prenom": utilisateur.prenom,
         "email": utilisateur.email,
-        "date_creation": utilisateur.date_creation
+        "created_at": utilisateur.created_at
     })
 
 # Route pour ajouter une pénalité
@@ -150,7 +153,6 @@ def ajouter_penalite():
     nouvelle_penalite = Penalite(
         utilisateur_id=data['utilisateur_id'], 
         montant=data['montant'], 
-        description=data['description']
     )
     db.session.add(nouvelle_penalite)
     db.session.commit()
@@ -166,15 +168,12 @@ def verifier_retards():
         emprunt.est_retard = True
         db.session.commit()
 
-        penalite_existante = Penalite.query.filter_by(utilisateur_id=emprunt.utilisateur_id).order_by(Penalite.date_penalite.desc()).first()
+        penalite_existante = Penalite.query.filter_by(utilisateur_id=emprunt.utilisateur_id).first()
         
         if penalite_existante:
-            if penalite_existante.date_penalite < today:
                 nouvelle_penalite = Penalite(
                     utilisateur_id=emprunt.utilisateur_id,
                     montant=5.00,
-                    description=f"Retard pour l'emprunt du livre {emprunt.livre_id}.",
-                    date_penalite=today
                 )
                 db.session.add(nouvelle_penalite)
                 db.session.commit()
@@ -182,8 +181,6 @@ def verifier_retards():
             nouvelle_penalite = Penalite(
                 utilisateur_id=emprunt.utilisateur_id,
                 montant=5.00,
-                description=f"Retard pour l'emprunt du livre {emprunt.livre_id}.",
-                date_penalite=today
             )
             db.session.add(nouvelle_penalite)
             db.session.commit()
@@ -258,6 +255,29 @@ def send_payment_notification(penalite_id):
         app.logger.info(f"Message envoyé : {message}")
     except Exception as e:
         app.logger.error(f"Erreur lors de l'envoi du message RabbitMQ : {str(e)}")
+
+
+@app.route('/valid-user/<int:id_utilisateur>', methods=['GET'])
+def get_utilisateur_validity(id_utilisateur):
+    utilisateur = Utilisateur.query.get(id_utilisateur)
+    
+    # Vérifier si l'utilisateur existe
+    if not utilisateur:
+        return jsonify({"message": "Utilisateur non trouvé"}), 404
+    
+    # Vérifier si l'utilisateur est actif
+    if utilisateur.statut != 'actif':
+        return jsonify({"message": "Utilisateur non actif"}), 400
+
+    # Vérifier si les pénalités de l'utilisateur sont à moins de 30 euros
+    penalites = Penalite.query.filter_by(utilisateur_id=id_utilisateur).all()
+    total_penalites = sum(p.montant for p in penalites)
+
+    if total_penalites >= 30:
+        return jsonify({"valid" : False, "reason": "Too much penalities"}), 200
+
+    return jsonify({"valid" : True})
+
 
 
 threading.Thread(target=start_rabbitmq_consumer, daemon=True).start()
