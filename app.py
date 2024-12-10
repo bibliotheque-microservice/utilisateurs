@@ -217,7 +217,7 @@ def pay_penalite():
         cursor = conn.cursor()
 
         # Vérifie si la pénalité existe
-        cursor.execute('SELECT * FROM penalites WHERE id_penalite = %s', (penalite_id,))
+        cursor.execute('SELECT * FROM penalites WHERE id_penalite = %s AND paye = FALSE', (penalite_id,))
         penalite = cursor.fetchone()
 
         if not penalite:
