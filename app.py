@@ -11,8 +11,6 @@ import pika
 from dotenv import load_dotenv
 import logging
 
-
-
 # Charger les variables d'environnement
 load_dotenv()
 
@@ -36,7 +34,6 @@ DB_PORT = os.getenv('DB_PORT')
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq-users')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'admin')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'admin')
-
 
 # Vérification des variables d'environnement
 missing_env_vars = [
@@ -88,11 +85,15 @@ def init_rabbitmq():
         )
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
-        channel.queue_declare(queue='paiements_queue', durable=True)
+        
+        # Déclaration des queues nécessaires
+        channel.queue_declare(queue='user_penalties_queue', durable=True)
+
         app.logger.info("RabbitMQ initialisé avec succès.")
     except Exception as e:
         app.logger.error(f"Erreur lors de l'initialisation de RabbitMQ : {str(e)}")
         connection, channel = None, None
+
 
 # Callback pour RabbitMQ
 def rabbitmq_callback(ch, method, properties, body):
@@ -111,7 +112,6 @@ def start_rabbitmq_consumer():
         channel.start_consuming()
     except Exception as e:
         app.logger.error(f"Erreur lors de la consommation des messages : {str(e)}")
-
 
 # Route pour la page d'accueil
 @app.route('/')
@@ -156,39 +156,56 @@ def ajouter_penalite():
     db.session.commit()
     return jsonify({"message": "Pénalité ajoutée avec succès."})
 
-# Route pour vérifier les emprunts en retard
 @app.route('/verifier_retards', methods=['GET'])
 def verifier_retards():
     today = datetime.today().date()
-    emprunts_en_retard = Emprunt.query.filter(Emprunt.date_retour_effectif < today).all()
+    emprunts_en_retard = Emprunt.query.filter(
+        (Emprunt.date_retour_prevu < today) & (Emprunt.date_retour_effectif == None)
+    ).all()
 
     for emprunt in emprunts_en_retard:
-        emprunt.est_retard = True
-        db.session.commit()
-
-        penalite_existante = Penalite.query.filter_by(utilisateur_id=emprunt.utilisateur_id).order_by(Penalite.date_penalite.desc()).first()
+        # Vérifiez si une pénalité existe pour cet emprunt
+        penalite_existante = Penalite.query.filter_by(utilisateur_id=emprunt.utilisateur_id).first()
         
         if penalite_existante:
-            if penalite_existante.date_penalite < today:
-                nouvelle_penalite = Penalite(
-                    utilisateur_id=emprunt.utilisateur_id,
-                    montant=5.00,
-                    description=f"Retard pour l'emprunt du livre {emprunt.livre_id}.",
-                    date_penalite=today
-                )
-                db.session.add(nouvelle_penalite)
-                db.session.commit()
+            # Mise à jour de la pénalité existante
+            penalite_existante.montant += 5.00  # Augmenter la pénalité
+            penalite_existante.date_penalite = today
+            db.session.commit()
+
+            # Publier un message pour une pénalité mise à jour
+            message = {
+                "penalityId": penalite_existante.id,
+                "empruntId": emprunt.id_emprunt,
+                "amount": float(penalite_existante.montant),
+                "userId": emprunt.utilisateur_id,
+                "created_at": penalite_existante.date_penalite.isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            send_rabbitmq_message('user.v1.penalities.updated', message)
         else:
+            # Création d'une nouvelle pénalité
             nouvelle_penalite = Penalite(
                 utilisateur_id=emprunt.utilisateur_id,
                 montant=5.00,
                 description=f"Retard pour l'emprunt du livre {emprunt.livre_id}.",
-                date_penalite=today
+                date_penalite=today,
             )
             db.session.add(nouvelle_penalite)
             db.session.commit()
 
-    return jsonify({"message": "Retards vérifiés et pénalités créées."})
+            # Publier un message pour une nouvelle pénalité
+            message = {
+                "penalityId": nouvelle_penalite.id,
+                "empruntId": emprunt.id_emprunt,
+                "amount": float(nouvelle_penalite.montant),
+                "userId": emprunt.utilisateur_id,
+                "created_at": nouvelle_penalite.date_penalite.isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            send_rabbitmq_message('user.v1.penalities.new', message)
+
+    return jsonify({"message": "Retards vérifiés et pénalités mises à jour ou créées."})
 
 # Route pour payer une pénalité
 @app.route('/penalite/pay', methods=['POST'])
@@ -262,6 +279,23 @@ def send_payment_notification(penalite_id):
 
 threading.Thread(target=start_rabbitmq_consumer, daemon=True).start()
 
+def send_rabbitmq_message(routing_key, message):
+    try:
+        if channel is None or not channel.is_open:
+            app.logger.error("Canal RabbitMQ fermé ou non initialisé. Tentative de reconnexion...")
+            init_rabbitmq()
+  
+        channel.basic_publish(
+            exchange='',
+            routing_key='user_penalties_queue',
+            body=json.dumps(message),
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # Rendre le message persistant
+            )
+        )
+        app.logger.info(f"Message envoyé avec la clé {routing_key}: {message}")
+    except Exception as e:
+        app.logger.error(f"Erreur lors de l'envoi du message RabbitMQ : {str(e)}")
 
 # Lancer l'application Flask et RabbitMQ
 if __name__ == '__main__':
