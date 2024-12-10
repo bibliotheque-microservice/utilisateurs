@@ -274,7 +274,7 @@ def get_utilisateur_validity(id_utilisateur):
     total_penalites = sum(p.montant for p in penalites)
 
     if total_penalites >= 30:
-        return jsonify({"valid" : False, "reason": "Too much penalities"}), 200
+        return jsonify({"valid" : False, "message": "Too much penalities"}), 200
 
     return jsonify({"valid" : True, "message": "Utilisateur valide"})
 
