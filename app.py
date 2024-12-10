@@ -74,59 +74,44 @@ class Emprunt(db.Model):
 with app.app_context():
     db.create_all()
 
+connection = None
+channel = None
+
 # Fonction pour initialiser RabbitMQ
 def init_rabbitmq():
     global connection, channel
-    print("here")
-    app.logger.info("here")
-
     try:
-        app.logger.info("Tentative de connexion à RabbitMQ...")
-        parameters = pika.ConnectionParameters(RABBITMQ_HOST,5672,  credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD), heartbeat=10)
-        # Connexion à RabbitMQ
+        app.logger.info("Initialisation de RabbitMQ...")
+        parameters = pika.ConnectionParameters(
+            host=RABBITMQ_HOST,
+            credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD),
+        )
         connection = pika.BlockingConnection(parameters)
-        # Création du canal
         channel = connection.channel()
-        # Déclaration de la queue
-        channel.queue_declare(queue='paiements_queue', durable=True, auto_delete=False)
-        app.logger.info("RabbitMQ initialisé et queue déclarée.")
-        
-        return connection, channel     
+        channel.queue_declare(queue='paiements_queue', durable=True)
+        app.logger.info("RabbitMQ initialisé avec succès.")
     except Exception as e:
-        app.logger.error(f"Erreur lors de l'initialisation de RabbitMQ: {str(e)}")
+        app.logger.error(f"Erreur lors de l'initialisation de RabbitMQ : {str(e)}")
+        connection, channel = None, None
 
+# Callback pour RabbitMQ
+def rabbitmq_callback(ch, method, properties, body):
+    app.logger.info(f"Message reçu : {body.decode()}")
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
-connection, channel = init_rabbitmq()
-
-def callback(method, properties, body):
-    """pika basic consume callback"""
-    try:
-        print('GOT:', body.decode())  # Confirm message content
-        app.logger.info(f"Received message: {body.decode()}")
-    except Exception as e:
-        app.logger.error(f"Erreur lors du traitement du message : {e}")
-
-def start_consuming():
-    """Commence la consommation des messages RabbitMQ"""
+# Consommation des messages RabbitMQ
+def start_rabbitmq_consumer():
+    global channel
     try:
         if channel is None or channel.is_closed:
-            raise Exception("Canal RabbitMQ non initialisé ou fermé")
-        
-        # Démarre la consommation de messages
-        channel.basic_consume(queue='paiements_queue', on_message_callback=callback, auto_ack=True)
-        app.logger.info("En attente de messages...")
-        channel.start_consuming()  # Cette méthode est bloquante, elle attend des messages en continu
+            app.logger.warning("Le canal RabbitMQ n'est pas prêt. Réinitialisation...")
+            init_rabbitmq()
+        channel.basic_consume(queue='paiements_queue', on_message_callback=rabbitmq_callback)
+        app.logger.info("Démarrage de la consommation RabbitMQ...")
+        channel.start_consuming()
     except Exception as e:
         app.logger.error(f"Erreur lors de la consommation des messages : {str(e)}")
 
-def start_rabbitmq_thread():
-    """Démarre un thread pour consommer les messages RabbitMQ"""
-    consumer_thread = threading.Thread(target=start_consuming)
-    consumer_thread.daemon = True  # S'assure que le thread se termine quand l'application principale se termine
-    consumer_thread.start()
-
-
-start_rabbitmq_thread() 
 
 # Route pour la page d'accueil
 @app.route('/')
@@ -274,11 +259,13 @@ def send_payment_notification(penalite_id):
     except Exception as e:
         app.logger.error(f"Erreur lors de l'envoi du message RabbitMQ : {str(e)}")
 
+
+threading.Thread(target=start_rabbitmq_consumer, daemon=True).start()
+
+
 # Lancer l'application Flask et RabbitMQ
 if __name__ == '__main__':
+    init_rabbitmq() 
     # Lancer RabbitMQ dans un thread séparé pour ne pas bloquer Flask
-    rabbitmq_thread = threading.Thread(target=start_consuming)
-    rabbitmq_thread.daemon = True 
-    rabbitmq_thread.start()
     app.run(debug=True, host='0.0.0.0', port=5000)
 
