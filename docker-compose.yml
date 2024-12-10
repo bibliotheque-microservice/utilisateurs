@@ -11,8 +11,7 @@ services:
       - FLASK_APP=app.py  
       - FLASK_DEBUG=1  
     volumes:
-      - .:/usr/src/app
-    command: flask run --host=0.0.0.0
+      - .:/usr/src/app  # Montage du répertoire principal pour l'application
     depends_on:
       db:
         condition: service_healthy
@@ -42,11 +41,11 @@ services:
       - 5672:5672
       - 15672:15672
     volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-      - rabbitmq-log:/var/log/rabbitmq
+      - ./rabbitMQ:/usr/src/app/rabbitMQ  # Montage du répertoire rabbitMQ
 
   db:
     image: postgres:alpine
+    container_name: 'postgres-db'
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
