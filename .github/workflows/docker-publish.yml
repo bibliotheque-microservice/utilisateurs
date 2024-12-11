@@ -19,24 +19,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Create virtual environment
-      run: |
-        python -m venv venv
-        source venv/bin/activate
-
-    - name: Install dependencies
-      run: |
-        source venv/bin/activate
-        pip install -r requirements.txt
-
-    - name: Skip Tests
-      run: echo "Skipping tests step"
-
     - name: Vérifier que le secret LOGINDOCKER est valide
       run: |
         if [ -z "${{ secrets.LOGINDOCKER }}" ]; then
