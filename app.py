@@ -267,7 +267,7 @@ def get_utilisateur_validity(id_utilisateur):
     
     # Vérifier si l'utilisateur est actif
     if utilisateur.statut != 'actif':
-        return jsonify({"message": "Utilisateur non actif"}), 400
+        return jsonify({"valid" : False,"message": "Utilisateur non actif"}), 200
 
     # Vérifier si les pénalités de l'utilisateur sont à moins de 30 euros
     penalites = Penalite.query.filter_by(utilisateur_id=id_utilisateur).all()
