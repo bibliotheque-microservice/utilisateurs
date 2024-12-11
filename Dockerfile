@@ -10,7 +10,7 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Définir la variable FLASK_APP pour Flask
-ENV FLASK_APP=main.py
+ENV FLASK_APP=app.py
 
 # Exposer le port Flask
 EXPOSE 5000
