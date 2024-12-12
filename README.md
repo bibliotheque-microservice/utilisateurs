@@ -1,82 +1,70 @@
+#Service_des_utilisateurs
 Application de Gestion des Utilisateurs avec Flask et RabbitMQ
 
-Description
-Cette application permet de gérer les utilisateurs. Elle utilise Flask pour l'API REST, PostgreSQL pour la base de données, et RabbitMQ pour la gestion des messages.
 
-Fonctionnalités principales
+## Fonctionnalités principales
 
-Gestion des utilisateurs :
+### Ajouter un utilisateur :
 
-Ajouter un utilisateur
+### POST /utilisateurs
 
-Consulter les informations d'un utilisateur
-
-Vérifier la validité d'un utilisateur
-
-
-
-Utilisation
-
-Endpoints
-
-Utilisateurs
-
-Ajouter un utilisateur :
-
+```http
 POST /utilisateurs
-
-Payload JSON :
+```
+```json
 {
   "nom": "Doe",
   "prenom": "John",
   "email": "john.doe@example.com"
 }
-Récupérer un utilisateur par ID :
+```
 
+
+#### Récupérer un utilisateur par ID :
+
+```http
 GET /utilisateurs/<id>
+```
 
-Vérifier la validité d'un utilisateur :
+####Vérifier la validité d'un utilisateur :
 
+```http
 GET /valid-user/<id_utilisateur>
+```
 
-Emprunts
+##Emprunts
 
-Vérifier les retards :
+####Vérifier les retards :
 
+```http
 GET /verifier_retards
+```
 
-Pénalités
+###Pénalités
 
-Ajouter une pénalité :
+####Ajouter une pénalité :
 
+```http
 POST /penalites
+```
 
-Payload JSON :
+```json
 {
   "utilisateur_id": 1,
   "montant": 10.50
 }
-Payer une pénalité :
+```
 
+###Payer une pénalité :
+
+```http
 POST /penalite/pay
+```
 
-Payload JSON :
+```json
 {
   "id_penalite": 1
 }
-
-Journalisation
-
-Les journaux sont configurés pour enregistrer les événements importants de l'application et de RabbitMQ.
-
-Niveau de log : DEBUG
-
-Logs inclus :
-
-Initialisation de RabbitMQ
-
-Envoi et réception de messages
-
-Erreurs de base de données
+```
 
 
