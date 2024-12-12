@@ -99,4 +99,4 @@ CREATE TABLE penalites (
 );
 
 INSERT INTO penalites (utilisateur_id, emprunt_id, montant) 
-VALUES (1, 1, 50.00);
+VALUES (1, 1, 50.00),  (2, 2, 50.00), (3, 3, 50.00);
