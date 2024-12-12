@@ -1,4 +1,4 @@
-#Service_des_utilisateurs
+# Service_des_utilisateurs
 Application de Gestion des Utilisateurs avec Flask et RabbitMQ
 
 
@@ -26,23 +26,23 @@ POST /utilisateurs
 GET /utilisateurs/<id>
 ```
 
-####Vérifier la validité d'un utilisateur :
+#### Vérifier la validité d'un utilisateur :
 
 ```http
 GET /valid-user/<id_utilisateur>
 ```
 
-##Emprunts
+## Emprunts
 
-####Vérifier les retards :
+#### Vérifier les retards :
 
 ```http
 GET /verifier_retards
 ```
 
-###Pénalités
+### Pénalités
 
-####Ajouter une pénalité :
+#### Ajouter une pénalité :
 
 ```http
 POST /penalites
@@ -55,7 +55,7 @@ POST /penalites
 }
 ```
 
-###Payer une pénalité :
+### Payer une pénalité :
 
 ```http
 POST /penalite/pay
